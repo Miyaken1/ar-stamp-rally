@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ARスタンプラリー</title>
+  <!-- A-Frame と AR.js の読み込み -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/aframe/1.2.0/aframe.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/ar.js/2.3.0/aframe-ar.js"></script>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      font-family: Arial, sans-serif;
+    }
+    
+    #ui-container {
+      position: fixed;
+      bottom: 20px;
+      left: 0;
+      right: 0;
+      z-index: 9999;
+      text-align: center;
+      padding: 10px;
+    }
+    
+    .message-box {
+      background-color: rgba(255, 255, 255, 0.8);
+      border-radius: 10px;
+      padding: 15px;
+      margin: 0 auto;
+      max-width: 80%;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+    }
+    
+    .loading-indicator {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 3px solid rgba(255, 255, 255, 0.3);
+      border-radius: 50%;
+      border-top-color: #007BFF;
+      animation: spin 1s ease-in-out infinite;
+      margin-right: 10px;
+    }
+    
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    
+    .stamp-list {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      background-color: rgba(255, 255, 255, 0.8);
+      border-radius: 10px;
+      padding: 10px;
+      z-index: 9999;
+    }
+    
+    .stamp-list button {
+      background-color: #007BFF;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      padding: 8px 12px;
+      cursor: pointer;
+    }
+    
+    .hidden {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <!-- A-Frame のシーン設定 -->
+  <a-scene embedded arjs="sourceType: webcam; debugUIEnabled: false;" vr-mode-ui="enabled: false">
+    <!-- AR コンテンツ（3Dモデル） -->
+    <a-entity
+      position="0 0 -1"
+      scale="0.5 0.5 0.5"
+      rotation="0 0 0"
+      animation="property: rotation; to: 0 360 0; loop: true; dur: 10000; easing: linear"
+    >
+      <!-- シンプルな3Dオブジェクト -->
+      <a-box position="0 0.5 0" color="#4CC3D9"></a-box>
+      <a-sphere position="0 1.25 0" radius="0.5" color="#EF2D5E"></a-sphere>
+      <a-cylinder position="0 0 0" radius="0.5" height="1.5" color="#FFC65D"></a-cylinder>
+      <a-plane position="0 0 -2" rotation="-90 0 0" width="4" height="4" color="#7BC8A4"></a-plane>
+    </a-entity>
+    
+    <!-- カメラ -->
+    <a-entity camera></a-entity>
+  </a-scene>
+  
+  <!-- UI 要素 -->
+  <div id="ui-container">
+    <div id="loading-message" class="message-box">
+      <div class="loading-indicator"></div>
+      <span>ARコンテンツを読み込み中...</span>
+    </div>
+    
+    <div id="stamp-message" class="message-box hidden">
+      <h3>スタンプゲット！</h3>
+      <p id="stamp-details">おめでとうございます！このポイントのスタンプを獲得しました。</p>
+      <p id="stamp-count"></p>
+    </div>
+  </div>
+  
+  <div class="stamp-list">
+    <button id="show-stamps">スタンプ一覧</button>
+  </div>
+  
+  <script>
+    // スタンプデータの初期化と取得
+    function initStampData() {
+      let stamps = localStorage.getItem('ar-stamps');
+      if (!stamps) {
+        stamps = JSON.stringify({
+          totalStamps: 0,
+          locations: {}
+        });
+        localStorage.setItem('ar-stamps', stamps);
+      }
+      return JSON.parse(stamps);
+    }
+    
+    // 現在のスタンプラリーポイントを特定（URLパラメータから）
+    function getCurrentLocation() {
+      const urlParams = new URLSearchParams(window.location.search);
+      return urlParams.get('location') || 'unknown';
+    }
+    
+    // スタンプを追加
+    function addStamp(locationId) {
+      const stampData = initStampData();
+      
+      // すでにスタンプを取得済みかチェック
+      if (stampData.locations[locationId]) {
+        showStampMessage(locationId, true);
+        return;
+      }
+      
+      // スタンプを追加
+      stampData.locations[locationId] = {
+        timestamp: new Date().toISOString(),
+        name: getLocationName(locationId)
+      };
+      stampData.totalStamps += 1;
+      
+      // データを保存
+      localStorage.setItem('ar-stamps', JSON.stringify(stampData));
+      
+      // メッセージを表示
+      showStampMessage(locationId, false);
+    }
+    
+    // ロケーション名を取得（実際のプロジェクトではサーバーサイドから取得するか、マッピングテーブルを用意）
+    function getLocationName(locationId) {
+      const locationNames = {
+        'location1': '入り口',
+        'location2': '中央広場',
+        'location3': '休憩所',
+        'location4': 'ギャラリー',
+        'location5': '出口'
+      };
+      
+      return locationNames[locationId] || 'ポイント ' + locationId;
+    }
+    
+    // スタンプ獲得メッセージを表示
+    function showStampMessage(locationId, isRevisit) {
+      const stampData = JSON.parse(localStorage.getItem('ar-stamps'));
+      const loadingMessage = document.getElementById('loading-message');
+      const stampMessage = document.getElementById('stamp-message');
+      const stampDetails = document.getElementById('stamp-details');
+      const stampCount = document.getElementById('stamp-count');
+      
+      loadingMessage.classList.add('hidden');
+      stampMessage.classList.remove('hidden');
+      
+      if (isRevisit) {
+        stampDetails.textContent = `あなたはすでに「${getLocationName(locationId)}」のスタンプを取得済みです。`;
+      } else {
+        stampDetails.textContent = `おめでとうございます！「${getLocationName(locationId)}」のスタンプを獲得しました。`;
+      }
+      
+      stampCount.textContent = `現在の獲得スタンプ: ${stampData.totalStamps} 個`;
+    }
+    
+    // スタンプ一覧を表示
+    function showStampList() {
+      const stampData = JSON.parse(localStorage.getItem('ar-stamps'));
+      let message = `現在の獲得スタンプ: ${stampData.totalStamps} 個\n\n`;
+      
+      for (const locationId in stampData.locations) {
+        const location = stampData.locations[locationId];
+        const date = new Date(location.timestamp);
+        message += `・${location.name}: ${date.toLocaleDateString()} ${date.toLocaleTimeString()}\n`;
+      }
+      
+      alert(message);
+    }
+    
+    // ページ読み込み時の処理
+    window.addEventListener('load', () => {
+      const locationId = getCurrentLocation();
+      
+      // スタンプ一覧ボタンのイベントリスナー
+      document.getElementById('show-stamps').addEventListener('click', showStampList);
+      
+      // ARコンテンツ読み込み後、自動的にスタンプを獲得
+      setTimeout(() => {
+        addStamp(locationId);
+      }, 4000); // 4秒後に自動実行
+    });
+  </script>
+</body>
+</html>

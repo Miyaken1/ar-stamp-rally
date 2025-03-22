@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>QRコードスキャナー</title>
+  <!-- Instascan ライブラリ -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/instascan/1.0.0/instascan.min.js"></script>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: Arial, sans-serif;
+      background-color: #f5f5f5;
+    }
+    
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      text-align: center;
+    }
+    
+    h1 {
+      color: #333;
+      margin-bottom: 20px;
+    }
+    
+    #preview {
+      width: 100%;
+      max-width: 400px;
+      margin: 0 auto;
+      border: 3px solid #007BFF;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    
+    .guide {
+      margin-top: 20px;
+      padding: 15px;
+      background-color: #fff;
+      border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    }
+    
+    .status {
+      margin-top: 20px;
+      padding: 10px;
+      border-radius: 5px;
+      font-weight: bold;
+      display: none;
+    }
+    
+    .success {
+      background-color: #d4edda;
+      color: #155724;
+      border: 1px solid #c3e6cb;
+    }
+    
+    .error {
+      background-color: #f8d7da;
+      color: #721c24;
+      border: 1px solid #f5c6cb;
+    }
+    
+    .stamp-count {
+      margin-top: 20px;
+      font-size: 18px;
+      font-weight: bold;
+      color: #007BFF;
+    }
+    
+    button {
+      margin-top: 15px;
+      background-color: #007BFF;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      padding: 10px 20px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    
+    button:hover {
+      background-color: #0056b3;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>ARスタンプラリー</h1>
+    
+    <div class="guide">
+      <p>QRコードをスキャンして、スタンプを集めましょう！</p>
+    </div>
+    
+    <div id="preview"></div>
+    
+    <div id="status" class="status"></div>
+    
+    <div id="stamp-count" class="stamp-count"></div>
+    
+    <button id="show-stamps">スタンプ一覧</button>
+  </div>
+  
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      // 既存のスタンプデータを取得
+      function getStampData() {
+        let stamps = localStorage.getItem('ar-stamps');
+        if (!stamps) {
+          stamps = JSON.stringify({
+            totalStamps: 0,
+            locations: {}
+          });
+          localStorage.setItem('ar-stamps', stamps);
+        }
+        return JSON.parse(stamps);
+      }
+      
+      // スタンプ数を表示
+      function updateStampCount() {
+        const stampData = getStampData();
+        const stampCountElement = document.getElementById('stamp-count');
+        stampCountElement.textContent = `獲得したスタンプ: ${stampData.totalStamps} 個`;
+      }
+      
+      // スキャナーの初期化
+      let scanner = new Instascan.Scanner({ 
+        video: document.getElementById('preview'),
+        mirror: false
+      });
+      
+      // QRコードスキャン時の処理
+      scanner.addListener('scan', function(content) {
+        try {
+          // スキャン音を再生（オプション）
+          const audio = new Audio('https://cdn.jsdelivr.net/gh/niklasvh/html-to-image@v1.11.11/dist/html-to-image.js'); // この行は実際のプロジェクトでは適切な音声ファイルに置き換える
+          audio.play().catch(e => console.log('Audio play failed:', e));
+          
+          // URLであるかチェック
+          if (content.startsWith('http://') || content.startsWith('https://')) {
+            // QRコードがURLの場合、リダイレクト
+            const statusElement = document.getElementById('status');
+            statusElement.textContent = 'QRコードを認識しました。ARコンテンツに移動します...';
+            statusElement.className = 'status success';
+            statusElement.style.display = 'block';
+            
+            // 少し待ってからリダイレクト
+            setTimeout(() => {
+              window.location.href = content;
+            }, 1000);
+          } else {
+            // URLでない場合はエラーメッセージを表示
+            const statusElement = document.getElementById('status');
+            statusElement.textContent = '無効なQRコードです。スタンプラリー用のQRコードをスキャンしてください。';
+            statusElement.className = 'status error';
+            statusElement.style.display = 'block';
+            
+            // エラーメッセージを数秒後に消す
+            setTimeout(() => {
+              statusElement.style.display = 'none';
+            }, 3000);
+          }
+        } catch (error) {
+          console.error('QR処理エラー:', error);
+          alert('QRコードの処理中にエラーが発生しました。もう一度お試しください。');
+        }
+      });
+      
+      // カメラの初期化
+      Instascan.Camera.getCameras().then(function(cameras) {
+        if (cameras.length > 0) {
+          // 背面カメラを優先的に使用
+          let selectedCamera = cameras[0]; // デフォルトは最初のカメラ
+          
+          // 複数のカメラがある場合、背面カメラ（environment）を選択
+          for (let i = 0; i < cameras.length; i++) {
+            if (cameras[i].name.toLowerCase().indexOf('back') !== -1 || 
+                cameras[i].name.toLowerCase().indexOf('environment') !== -1) {
+              selectedCamera = cameras[i];
+              break;
+            }
+          }
+          
+          scanner.start(selectedCamera);
+        } else {
+          console.error('カメラが見つかりません');
+          alert('お使いのデバイスではカメラが利用できません。別のデバイスでお試しください。');
+        }
+      }).catch(function(e) {
+        console.error('カメラアクセスエラー:', e);
+        alert('カメラへのアクセスに失敗しました。カメラの使用許可を確認してください。');
+      });
+      
+      // スタンプ一覧を表示
+      document.getElementById('show-stamps').addEventListener('click', function() {
+        const stampData = getStampData();
+        let message = `獲得したスタンプ: ${stampData.totalStamps} 個\n\n`;
+        
+        if (stampData.totalStamps === 0) {
+          message += 'まだスタンプを獲得していません。QRコードをスキャンしてスタンプを集めましょう！';
+        } else {
+          for (const locationId in stampData.locations) {
+            const location = stampData.locations[locationId];
+            const date = new Date(location.timestamp);
+            message += `・${location.name}: ${date.toLocaleDateString()} ${date.toLocaleTimeString()}\n`;
+          }
+        }
+        
+        alert(message);
+      });
+      
+      // 初期スタンプ数の表示
+      updateStampCount();
+    });
+  </script>
+</body>
+</html>

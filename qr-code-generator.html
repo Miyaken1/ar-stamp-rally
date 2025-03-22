@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>スタンプラリーQRコード生成</title>
+  <!-- QRコード生成ライブラリ -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 20px;
+      background-color: #f5f5f5;
+    }
+    
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      background-color: white;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    }
+    
+    h1 {
+      color: #333;
+      text-align: center;
+    }
+    
+    .form-group {
+      margin-bottom: 15px;
+    }
+    
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: bold;
+    }
+    
+    input, select {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      box-sizing: border-box;
+    }
+    
+    button {
+      background-color: #007BFF;
+      color: white;
+      border: none;
+      padding: 10px 15px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    
+    button:hover {
+      background-color: #0056b3;
+    }
+    
+    .qr-container {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      margin-top: 20px;
+    }
+    
+    .qr-item {
+      margin: 10px;
+      padding: 15px;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      text-align: center;
+      background-color: white;
+    }
+    
+    .qr-code {
+      margin: 10px auto;
+    }
+    
+    .download-link {
+      display: block;
+      margin-top: 10px;
+      color: #007BFF;
+      text-decoration: none;
+    }
+    
+    .instructions {
+      margin-top: 20px;
+      padding: 15px;
+      background-color: #f8f9fa;
+      border-radius: 5px;
+      border-left: 4px solid #007BFF;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>スタンプラリーQRコード生成</h1>
+    
+    <div class="instructions">
+      <h3>使用方法</h3>
+      <p>このツールは、ARスタンプラリー用のQRコードを生成します。以下の手順に従ってください：</p>
+      <ol>
+        <li>あなたのウェブサイトのベースURLを入力します（例：<code>https://yourdomain.com/ar-rally/</code>）</li>
+        <li>生成するロケーション数を選択します</li>
+        <li>「QRコードを生成」ボタンをクリックします</li>
+        <li>生成されたQRコードを印刷し、各ロケーションに設置します</li>
+      </ol>
+    </div>
+    
+    <div class="form-group">
+      <label for="base-url">ベースURL（index.htmlが置かれているURL）</label>
+      <input type="text" id="base-url" placeholder="https://yourdomain.com/ar-rally/" value="https://example.com/ar-rally/">
+    </div>
+    
+    <div class="form-group">
+      <label for="location-count">ロケーション数</label>
+      <select id="location-count">
+        <option value="1">1</option>
+        <option value="3">3</option>
+        <option value="5" selected>5</option>
+        <option value="10">10</option>
+        <option value="custom">カスタム...</option>
+      </select>
+    </div>
+    
+    <div class="form-group" id="custom-count-container" style="display: none;">
+      <label for="custom-count">カスタムロケーション数</label>
+      <input type="number" id="custom-count" min="1" max="50" value="5">
+    </div>
+    
+    <button id="generate-button">QRコードを生成</button>
+    
+    <div id="qr-container" class="qr-container"></div>
+  </div>
+  
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const locationCountSelect = document.getElementById('location-count');
+      const customCountContainer = document.getElementById('custom-count-container');
+      const customCountInput = document.getElementById('custom-count');
+      const generateButton = document.getElementById('generate-button');
+      const qrContainer = document.getElementById('qr-container');
+      const baseUrlInput = document.getElementById('base-url');
+      
+      // ロケーション名のマッピング
+      const locationNames = {
+        'location1': '入り口',
+        'location2': '中央広場',
+        'location3': '休憩所',
+        'location4': 'ギャラリー',
+        'location5': '出口',
+        'location6': 'カフェ',
+        'location7': '展示室A',
+        'location8': '展示室B',
+        'location9': '展示室C',
+        'location10': 'ショップ'
+      };
+      
+      // カスタム数選択時の表示切替
+      locationCountSelect.addEventListener('change', function() {
+        if (this.value === 'custom') {
+          customCountContainer.style.display = 'block';
+        } else {
+          customCountContainer.style.display = 'none';
+        }
+      });
+      
+      // QRコード生成処理
+      generateButton.addEventListener('click', function() {
+        let count = parseInt(locationCountSelect.value);
+        
+        if (locationCountSelect.value === 'custom') {
+          count = parseInt(customCountInput.value);
+          if (isNaN(count) || count < 1 || count > 50) {
+            alert('有効なロケーション数（1～50）を入力してください。');
+            return;
+          }
+        }
+        
+        let baseUrl = baseUrlInput.value.trim();
+        
+        // URLの末尾がスラッシュで終わっていることを確認
+        if (!baseUrl.endsWith('/')) {
+          baseUrl += '/';
+        }
+        
+        // 既存のQRコードをクリア
+        qrContainer.innerHTML = '';
+        
+        // 各ロケーションのQRコードを生成
+        for (let i = 1; i <= count; i++) {
+          const locationId = `location${i}`;
+          const locationName = locationNames[locationId] || `ポイント ${i}`;
+          const url = `${baseUrl}index.html?location=${locationId}`;
+          
+          const qrItem = document.createElement('div');
+          qrItem.className = 'qr-item';
+          
+          const title = document.createElement('h3');
+          title.textContent = locationName;
+          qrItem.appendChild(title);
+          
+          const description = document.createElement('p');
+          description.textContent = `ロケーションID: ${locationId}`;
+          qrItem.appendChild(description);
+          
+          const qrCode = document.createElement('div');
+          qrCode.id = `qr-${locationId}`;
+          qrCode.className = 'qr-code';
+          qrItem.appendChild(qrCode);
+          
+          const urlDisplay = document.createElement('p');
+          urlDisplay.innerHTML = `<small>${url}</small>`;
+          qrItem.appendChild(urlDisplay);
+          
+          qrContainer.appendChild(qrItem);
+          
+          // QRコードを生成
+          new QRCode(qrCode, {
+            text: url,
+            width: 128,
+            height: 128,
+            colorDark: '#000000',
+            colorLight: '#ffffff',
+            correctLevel: QRCode.CorrectLevel.H
+          });
+          
+          // 直接ダウンロードはブラウザの制限でできないため、手動でダウンロードを促す
+          const instruction = document.createElement('p');
+          instruction.innerHTML = '<small>右クリックで画像を保存できます</small>';
+          qrItem.appendChild(instruction);
+        }
+      });
+    });
+  </script>
+</body>
+</html>
