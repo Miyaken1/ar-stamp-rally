@@ -3,216 +3,460 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ARスタンプラリー</title>
-  <!-- A-Frame と AR.js の読み込み -->
+  <title>QRコードスキャン & AR体験</title>
+  <!-- Instascan (QRコードスキャン用) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/instascan/1.0.0/instascan.min.js"></script>
+  <!-- A-Frame と AR.js (AR表示用) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/aframe/1.2.0/aframe.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/ar.js/2.3.0/aframe-ar.js"></script>
   <style>
-    body {
-      margin: 0;
+    body { 
+      margin: 0; 
+      font-family: Arial, sans-serif; 
       overflow: hidden;
-      font-family: Arial, sans-serif;
     }
     
-    #ui-container {
+    /* QRコードスキャン用のコンテナ */
+    #scanner-container { 
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 10;
+      background-color: #000;
+      transition: opacity 0.5s ease;
+    }
+    
+    #preview { 
+      width: 100%; 
+      height: 100%;
+      object-fit: cover;
+    }
+    
+    #scan-message {
+      position: absolute;
+      top: 20px;
+      left: 0;
+      right: 0;
+      text-align: center;
+      color: white;
+      background-color: rgba(0, 0, 0, 0.6);
+      padding: 10px;
+      font-size: 1.2rem;
+      z-index: 11;
+    }
+    
+    #error-message {
+      position: absolute;
+      bottom: 20px;
+      left: 0;
+      right: 0;
+      text-align: center;
+      color: white;
+      background-color: rgba(255, 0, 0, 0.7);
+      padding: 10px;
+      font-size: 1.2rem;
+      z-index: 11;
+      display: none;
+    }
+    
+    /* AR表示用のコンテナ */
+    #ar-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 5;
+      display: none;
+    }
+    
+    /* スタンプ獲得メッセージ */
+    #stamp-message {
+      display: none;
       position: fixed;
       bottom: 20px;
       left: 0;
       right: 0;
-      z-index: 9999;
       text-align: center;
-      padding: 10px;
-    }
-    
-    .message-box {
-      background-color: rgba(255, 255, 255, 0.8);
-      border-radius: 10px;
+      background: rgba(255,255,255,0.8);
       padding: 15px;
-      margin: 0 auto;
-      max-width: 80%;
-      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
-    }
-    
-    .loading-indicator {
-      display: inline-block;
-      width: 20px;
-      height: 20px;
-      border: 3px solid rgba(255, 255, 255, 0.3);
-      border-radius: 50%;
-      border-top-color: #007BFF;
-      animation: spin 1s ease-in-out infinite;
-      margin-right: 10px;
-    }
-    
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
-    
-    .stamp-list {
-      position: fixed;
-      top: 10px;
-      right: 10px;
-      background-color: rgba(255, 255, 255, 0.8);
+      font-weight: bold;
       border-radius: 10px;
-      padding: 10px;
-      z-index: 9999;
+      margin: 0 20px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+      z-index: 20;
     }
     
-    .stamp-list button {
-      background-color: #007BFF;
+    #stamp-title {
+      margin: 0;
+      color: #2c3e50;
+      font-size: 1.5rem;
+    }
+    
+    #stamp-details {
+      margin: 8px 0;
+      color: #34495e;
+      font-size: 1rem;
+    }
+    
+    #stamp-count {
+      margin: 5px 0;
+      color: #3498db;
+      font-size: 1.2rem;
+    }
+    
+    /* スタンプ一覧ボタン */
+    #stamps-button {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background-color: rgba(52, 152, 219, 0.8);
       color: white;
       border: none;
       border-radius: 5px;
-      padding: 8px 12px;
+      padding: 10px 15px;
+      font-size: 1rem;
       cursor: pointer;
+      z-index: 20;
+      display: none;
     }
     
-    .hidden {
+    #stamps-button:hover {
+      background-color: rgba(41, 128, 185, 0.9);
+    }
+    
+    /* ローディングインジケーター */
+    #loading-indicator {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 80px;
+      height: 80px;
+      border: 8px solid rgba(255, 255, 255, 0.3);
+      border-radius: 50%;
+      border-top-color: #3498db;
+      animation: spin 1s linear infinite;
+      z-index: 15;
       display: none;
+    }
+    
+    @keyframes spin {
+      0% { transform: translate(-50%, -50%) rotate(0deg); }
+      100% { transform: translate(-50%, -50%) rotate(360deg); }
     }
   </style>
 </head>
 <body>
-  <!-- A-Frame のシーン設定 -->
-  <a-scene embedded arjs="sourceType: webcam; debugUIEnabled: false;" vr-mode-ui="enabled: false">
-    <!-- AR コンテンツ（3Dモデル） -->
-    <a-entity
-      position="0 0 -1"
-      scale="0.5 0.5 0.5"
-      rotation="0 0 0"
-      animation="property: rotation; to: 0 360 0; loop: true; dur: 10000; easing: linear"
-    >
-      <!-- シンプルな3Dオブジェクト -->
-      <a-box position="0 0.5 0" color="#4CC3D9"></a-box>
-      <a-sphere position="0 1.25 0" radius="0.5" color="#EF2D5E"></a-sphere>
-      <a-cylinder position="0 0 0" radius="0.5" height="1.5" color="#FFC65D"></a-cylinder>
-      <a-plane position="0 0 -2" rotation="-90 0 0" width="4" height="4" color="#7BC8A4"></a-plane>
-    </a-entity>
-    
-    <!-- カメラ -->
-    <a-entity camera></a-entity>
-  </a-scene>
-  
-  <!-- UI 要素 -->
-  <div id="ui-container">
-    <div id="loading-message" class="message-box">
-      <div class="loading-indicator"></div>
-      <span>ARコンテンツを読み込み中...</span>
-    </div>
-    
-    <div id="stamp-message" class="message-box hidden">
-      <h3>スタンプゲット！</h3>
-      <p id="stamp-details">おめでとうございます！このポイントのスタンプを獲得しました。</p>
-      <p id="stamp-count"></p>
-    </div>
+  <!-- QRコードスキャン用エリア -->
+  <div id="scanner-container">
+    <video id="preview"></video>
+    <div id="scan-message">QRコードをスキャンしてください</div>
+    <div id="error-message"></div>
   </div>
   
-  <div class="stamp-list">
-    <button id="show-stamps">スタンプ一覧</button>
+  <!-- ローディングインジケーター -->
+  <div id="loading-indicator"></div>
+
+  <!-- AR表示用エリア -->
+  <div id="ar-container">
+    <a-scene embedded arjs="sourceType: webcam; debugUIEnabled: false;" vr-mode-ui="enabled: false">
+      <a-entity id="ar-content"></a-entity>
+      <a-entity camera></a-entity>
+    </a-scene>
+  </div>
+
+  <!-- スタンプ獲得メッセージ -->
+  <div id="stamp-message">
+    <h3 id="stamp-title">スタンプゲット！</h3>
+    <p id="stamp-details"></p>
+    <p id="stamp-count"></p>
   </div>
   
+  <!-- スタンプ一覧ボタン -->
+  <button id="stamps-button">スタンプ一覧</button>
+
   <script>
-    // スタンプデータの初期化と取得
-    function initStampData() {
+    // DOM要素
+    const scannerContainer = document.getElementById('scanner-container');
+    const arContainer = document.getElementById('ar-container');
+    const previewElement = document.getElementById('preview');
+    const errorMessage = document.getElementById('error-message');
+    const stampMessage = document.getElementById('stamp-message');
+    const stampDetails = document.getElementById('stamp-details');
+    const stampCount = document.getElementById('stamp-count');
+    const stampsButton = document.getElementById('stamps-button');
+    const loadingIndicator = document.getElementById('loading-indicator');
+    
+    // 現在のスキャンデータ
+    let currentScanData = null;
+    
+    // InstascanによるQRコード読み取り設定
+    let scanner = new Instascan.Scanner({ 
+      video: previewElement,
+      mirror: false  // モバイルでは鏡像反転しない
+    });
+    
+    // QRコードスキャン時の処理
+    scanner.addListener('scan', function(content) {
+      // QRコードの内容をJSONとしてパース
+      try {
+        // ローディングインジケーターを表示
+        loadingIndicator.style.display = 'block';
+        
+        // JSONパース
+        const data = JSON.parse(content);
+        currentScanData = data;
+        
+        // 必須フィールドのチェック
+        if (!data.location) {
+          throw new Error("データに'location'フィールドがありません");
+        }
+        
+        // arContentのデフォルト値設定
+        if (!data.arContent) {
+          data.arContent = {};
+        }
+        
+        // 外部設定ファイル (ar-config.json) を読み込み、該当ロケーションの設定があればマージする
+        fetchArConfig(data);
+      } catch (e) {
+        // JSONパースに失敗した場合はエラーメッセージを表示
+        showError("無効なQRコードです: " + e.message);
+        loadingIndicator.style.display = 'none';
+      }
+    });
+    
+    // 外部設定ファイルの読み込み
+    function fetchArConfig(data) {
+      fetch('ar-config.json')
+        .then(response => response.json())
+        .then(config => {
+          if (config[data.location]) {
+            // QRコード内のarContentと外部設定をマージ（外部設定をデフォルトとし、QR内の内容で上書き）
+            data.arContent = Object.assign({}, config[data.location], data.arContent);
+          }
+          // スキャン成功、AR画面に切り替え
+          switchToAR(data);
+        })
+        .catch(err => {
+          console.log("外部設定の読み込みエラー:", err);
+          // 外部設定が読み込めない場合でもQRコード内の情報で表示
+          switchToAR(data);
+        });
+    }
+    
+    // QRスキャン画面からAR画面への切り替え
+    function switchToAR(data) {
+      // スキャナーの停止
+      scanner.stop();
+      
+      // 画面の切り替え
+      scannerContainer.style.opacity = 0;
+      setTimeout(() => {
+        scannerContainer.style.display = 'none';
+        arContainer.style.display = 'block';
+        
+        // ARコンテンツの表示
+        displayARContent(data.arContent);
+        
+        // スタンプ一覧ボタンを表示
+        stampsButton.style.display = 'block';
+        
+        // ローディングインジケーターを非表示
+        loadingIndicator.style.display = 'none';
+        
+        // ARコンテンツ表示から4秒後にスタンプ獲得処理を実行
+        setTimeout(() => {
+          awardStamp(data.location, data.arContent);
+        }, 4000);
+      }, 500);
+    }
+    
+    // AR コンテンツの表示処理
+    function displayARContent(arContent) {
+      const arEntity = document.getElementById('ar-content');
+      
+      // 既存の内容をクリア
+      while (arEntity.firstChild) {
+        arEntity.removeChild(arEntity.firstChild);
+      }
+      
+      // もしarContentにモデルパスが指定されていれば3Dモデルを表示
+      if (arContent && arContent.model) {
+        const entity = document.createElement('a-entity');
+        entity.setAttribute('gltf-model', arContent.model);
+        entity.setAttribute('position', '0 0 -1');
+        entity.setAttribute('scale', '0.5 0.5 0.5');
+        entity.setAttribute('animation', 'property: rotation; to: 0 360 0; loop: true; dur: 10000; easing: linear');
+        arEntity.appendChild(entity);
+      } else {
+        // デフォルト表示：シンプルな立方体と球体
+        const box = document.createElement('a-box');
+        box.setAttribute('position', '0 0 -1');
+        box.setAttribute('color', arContent && arContent.color ? arContent.color : '#4CC3D9');
+        box.setAttribute('animation', 'property: rotation; to: 0 360 0; loop: true; dur: 10000; easing: linear');
+        arEntity.appendChild(box);
+        
+        if (!arContent || !arContent.hideDefaultObjects) {
+          const sphere = document.createElement('a-sphere');
+          sphere.setAttribute('position', '0 1 -1');
+          sphere.setAttribute('radius', '0.5');
+          sphere.setAttribute('color', '#EF2D5E');
+          arEntity.appendChild(sphere);
+        }
+      }
+    }
+    
+    // スタンプ獲得処理（ローカルストレージに記録し、メッセージを表示）
+    function awardStamp(location, arContent) {
+      // スタンプデータの取得（未存在の場合は初期化）
       let stamps = localStorage.getItem('ar-stamps');
       if (!stamps) {
-        stamps = JSON.stringify({
-          totalStamps: 0,
-          locations: {}
-        });
-        localStorage.setItem('ar-stamps', stamps);
-      }
-      return JSON.parse(stamps);
-    }
-    
-    // 現在のスタンプラリーポイントを特定（URLパラメータから）
-    function getCurrentLocation() {
-      const urlParams = new URLSearchParams(window.location.search);
-      return urlParams.get('location') || 'unknown';
-    }
-    
-    // スタンプを追加
-    function addStamp(locationId) {
-      const stampData = initStampData();
-      
-      // すでにスタンプを取得済みかチェック
-      if (stampData.locations[locationId]) {
-        showStampMessage(locationId, true);
-        return;
+        stamps = { totalStamps: 0, locations: {} };
+      } else {
+        stamps = JSON.parse(stamps);
       }
       
-      // スタンプを追加
-      stampData.locations[locationId] = {
-        timestamp: new Date().toISOString(),
-        name: getLocationName(locationId)
-      };
-      stampData.totalStamps += 1;
+      // ロケーション名の取得
+      const locationName = getLocationName(location);
       
-      // データを保存
-      localStorage.setItem('ar-stamps', JSON.stringify(stampData));
+      // 既にスタンプが存在するか確認
+      const isRevisit = !!stamps.locations[location];
       
-      // メッセージを表示
-      showStampMessage(locationId, false);
+      // 新規訪問の場合のみスタンプを追加
+      if (!isRevisit) {
+        stamps.locations[location] = { 
+          timestamp: new Date().toISOString(), 
+          name: locationName,
+          arContent: arContent 
+        };
+        stamps.totalStamps++;
+        localStorage.setItem('ar-stamps', JSON.stringify(stamps));
+      }
+      
+      // スタンプ獲得メッセージの表示
+      if (isRevisit) {
+        stampDetails.textContent = `あなたはすでに「${locationName}」のスタンプを取得済みです`;
+      } else {
+        stampDetails.textContent = `おめでとうございます！「${locationName}」のスタンプを獲得しました`;
+      }
+      
+      stampCount.textContent = `現在の獲得スタンプ: ${stamps.totalStamps}個`;
+      stampMessage.style.display = 'block';
+      
+      // メッセージを5秒後に消す
+      setTimeout(() => {
+        stampMessage.style.display = 'none';
+      }, 5000);
     }
     
-    // ロケーション名を取得（実際のプロジェクトではサーバーサイドから取得するか、マッピングテーブルを用意）
+    // ロケーション名を取得
     function getLocationName(locationId) {
       const locationNames = {
         'location1': '入り口',
         'location2': '中央広場',
         'location3': '休憩所',
         'location4': 'ギャラリー',
-        'location5': '出口'
+        'location5': '出口',
+        'location6': 'カフェ',
+        'location7': '展示室A',
+        'location8': '展示室B',
+        'location9': '展示室C',
+        'location10': 'ショップ'
       };
       
-      return locationNames[locationId] || 'ポイント ' + locationId;
+      return locationNames[locationId] || `ポイント ${locationId}`;
     }
     
-    // スタンプ獲得メッセージを表示
-    function showStampMessage(locationId, isRevisit) {
-      const stampData = JSON.parse(localStorage.getItem('ar-stamps'));
-      const loadingMessage = document.getElementById('loading-message');
-      const stampMessage = document.getElementById('stamp-message');
-      const stampDetails = document.getElementById('stamp-details');
-      const stampCount = document.getElementById('stamp-count');
-      
-      loadingMessage.classList.add('hidden');
-      stampMessage.classList.remove('hidden');
-      
-      if (isRevisit) {
-        stampDetails.textContent = `あなたはすでに「${getLocationName(locationId)}」のスタンプを取得済みです。`;
+    // スタンプ一覧の表示
+    function showStampList() {
+      let stamps = localStorage.getItem('ar-stamps');
+      if (!stamps) {
+        stamps = { totalStamps: 0, locations: {} };
       } else {
-        stampDetails.textContent = `おめでとうございます！「${getLocationName(locationId)}」のスタンプを獲得しました。`;
+        stamps = JSON.parse(stamps);
       }
       
-      stampCount.textContent = `現在の獲得スタンプ: ${stampData.totalStamps} 個`;
-    }
-    
-    // スタンプ一覧を表示
-    function showStampList() {
-      const stampData = JSON.parse(localStorage.getItem('ar-stamps'));
-      let message = `現在の獲得スタンプ: ${stampData.totalStamps} 個\n\n`;
+      let message = `現在の獲得スタンプ: ${stamps.totalStamps}個\n\n`;
       
-      for (const locationId in stampData.locations) {
-        const location = stampData.locations[locationId];
-        const date = new Date(location.timestamp);
-        message += `・${location.name}: ${date.toLocaleDateString()} ${date.toLocaleTimeString()}\n`;
+      if (stamps.totalStamps === 0) {
+        message += 'まだスタンプを獲得していません。QRコードをスキャンしてスタンプを集めましょう！';
+      } else {
+        for (const locationId in stamps.locations) {
+          const location = stamps.locations[locationId];
+          const date = new Date(location.timestamp);
+          const dateStr = `${date.getFullYear()}/${(date.getMonth()+1).toString().padStart(2, '0')}/${date.getDate().toString().padStart(2, '0')}`;
+          const timeStr = `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+          message += `・${location.name}: ${dateStr} ${timeStr}\n`;
+        }
       }
       
       alert(message);
     }
     
-    // ページ読み込み時の処理
-    window.addEventListener('load', () => {
-      const locationId = getCurrentLocation();
-      
-      // スタンプ一覧ボタンのイベントリスナー
-      document.getElementById('show-stamps').addEventListener('click', showStampList);
-      
-      // ARコンテンツ読み込み後、自動的にスタンプを獲得
+    // エラーメッセージの表示
+    function showError(message) {
+      errorMessage.textContent = message;
+      errorMessage.style.display = 'block';
       setTimeout(() => {
-        addStamp(locationId);
-      }, 4000); // 4秒後に自動実行
+        errorMessage.style.display = 'none';
+      }, 5000);
+    }
+    
+    // スタンプ一覧ボタンのイベントリスナー
+    stampsButton.addEventListener('click', showStampList);
+    
+    // 利用可能なカメラを取得して開始
+    Instascan.Camera.getCameras().then(function(cameras) {
+      if (cameras.length > 0) {
+        // 利用可能なバックカメラを探す（バックカメラが優先）
+        let selectedCamera = cameras[0]; // デフォルトは最初のカメラ
+        
+        // バックカメラを探す（多くの場合、モバイルデバイスでは後ろのカメラが優先）
+        for (let i = 0; i < cameras.length; i++) {
+          if (cameras[i].name && cameras[i].name.toLowerCase().indexOf('back') !== -1) {
+            selectedCamera = cameras[i];
+            break;
+          }
+        }
+        
+        scanner.start(selectedCamera);
+      } else {
+        showError("カメラが見つかりません");
+      }
+    }).catch(function(e) {
+      console.error(e);
+      showError("カメラへのアクセス権限が必要です");
+    });
+    
+    // ページロード時のイベントリスナー
+    window.addEventListener('load', function() {
+      // ブラウザの戻るボタンでスキャナー画面に戻れるようにする
+      window.onpopstate = function() {
+        if (arContainer.style.display === 'block') {
+          // AR画面からスキャナー画面に戻る
+          arContainer.style.display = 'none';
+          scannerContainer.style.display = 'block';
+          scannerContainer.style.opacity = 1;
+          stampsButton.style.display = 'none';
+          
+          // スキャナーを再開
+          Instascan.Camera.getCameras().then(function(cameras) {
+            if (cameras.length > 0) {
+              scanner.start(cameras[0]);
+            }
+          });
+          
+          // 現在表示中のスタンプメッセージを非表示
+          stampMessage.style.display = 'none';
+        }
+      };
+      
+      // 履歴に状態を追加（スキャナー画面）
+      history.pushState({ screen: 'scanner' }, 'QRコードスキャン');
     });
   </script>
 </body>
