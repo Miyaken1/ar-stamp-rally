@@ -3,95 +3,50 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>QRコードスキャン & AR体験</title>
-  <!-- Instascan (QRコードスキャン用) -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/instascan/1.0.0/instascan.min.js"></script>
+  <title>QRコードスキャン & AR体験 (iOS対応)</title>
+  <!-- jsQR ライブラリ -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
   <!-- A-Frame と AR.js (AR表示用) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/aframe/1.2.0/aframe.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/ar.js/2.3.0/aframe-ar.js"></script>
   <style>
-    body { 
-      margin: 0; 
-      font-family: Arial, sans-serif; 
-      overflow: hidden;
-    }
+    body { margin: 0; font-family: Arial, sans-serif; overflow: hidden; }
     /* QRコードスキャン用のコンテナ */
-    #scanner-container { 
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100vw;
-      height: 100vh;
-      z-index: 10;
-      background-color: #000;
-      transition: opacity 0.3s ease;
+    #scanner-container {
+      position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 10;
+      background-color: #000; transition: opacity 0.3s ease;
     }
-    #preview { 
-      width: 100%; 
-      height: 100%;
-      object-fit: cover;
+    #preview {
+      width: 100%; height: 100%; object-fit: cover;
     }
-    #scan-message {
-      position: absolute;
-      top: 20px;
-      left: 0;
-      right: 0;
-      text-align: center;
-      color: white;
-      background-color: rgba(0, 0, 0, 0.6);
-      padding: 10px;
-      font-size: 1.2rem;
-      z-index: 11;
+    /* スタートボタン（iOSではユーザー操作が必要） */
+    #start-button {
+      position: absolute; bottom: 50px; left: 50%; transform: translateX(-50%);
+      z-index: 12; padding: 15px 25px; font-size: 1.2rem;
     }
-    /* QRガイド（スキャン範囲の表示） */
+    /* QRコードスキャン範囲のガイドライン */
     #scan-guide {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      width: 60%;
-      height: 40%;
-      transform: translate(-50%, -50%);
-      border: 2px dashed #fff;
-      pointer-events: none;
-      z-index: 12;
+      position: absolute; top: 50%; left: 50%;
+      width: 60%; height: 40%; transform: translate(-50%, -50%);
+      border: 2px dashed #fff; pointer-events: none; z-index: 11;
     }
     #error-message {
-      position: absolute;
-      bottom: 20px;
-      left: 0;
-      right: 0;
-      text-align: center;
-      color: white;
-      background-color: rgba(255, 0, 0, 0.7);
-      padding: 10px;
-      font-size: 1.2rem;
-      z-index: 11;
-      display: none;
+      position: absolute; bottom: 20px; left: 0; right: 0; text-align: center;
+      color: white; background-color: rgba(255, 0, 0, 0.7); padding: 10px;
+      font-size: 1.2rem; z-index: 11; display: none;
     }
     /* AR表示用のコンテナ */
     #ar-container {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100vw;
-      height: 100vh;
-      z-index: 5;
-      display: none;
+      position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
+      z-index: 5; display: none;
     }
     /* ローディングインジケーター */
     #loading-indicator {
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      width: 80px;
-      height: 80px;
-      border: 8px solid rgba(255, 255, 255, 0.3);
-      border-radius: 50%;
-      border-top-color: #3498db;
-      animation: spin 1s linear infinite;
-      z-index: 15;
-      display: none;
+      position: fixed; top: 50%; left: 50%;
+      transform: translate(-50%, -50%); width: 80px; height: 80px;
+      border: 8px solid rgba(255, 255, 255, 0.3); border-radius: 50%;
+      border-top-color: #3498db; animation: spin 1s linear infinite;
+      z-index: 15; display: none;
     }
     @keyframes spin {
       0% { transform: translate(-50%, -50%) rotate(0deg); }
@@ -99,33 +54,30 @@
     }
     /* 再試行ボタン */
     #retry-button {
-      position: absolute;
-      bottom: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      padding: 10px 20px;
-      font-size: 1rem;
-      z-index: 16;
-      display: none;
+      position: absolute; bottom: 20px; left: 50%;
+      transform: translateX(-50%); padding: 10px 20px;
+      font-size: 1rem; z-index: 16; display: none;
     }
+    /* QRコード解析用の canvas（非表示） */
+    #qr-canvas { display: none; }
   </style>
 </head>
 <body>
   <!-- QRコードスキャン用エリア -->
   <div id="scanner-container" role="main" aria-label="QRコードスキャンエリア">
-    <video id="preview" autoplay playsinline></video>
+    <video id="preview" playsinline autoplay></video>
+    <canvas id="qr-canvas"></canvas>
     <div id="scan-guide"></div>
-    <div id="scan-message">QRコードをスキャンしてください</div>
+    <button id="start-button">スキャン開始</button>
     <div id="error-message" role="alert" aria-live="assertive"></div>
   </div>
-  
+
   <!-- ローディングインジケーター -->
   <div id="loading-indicator" aria-hidden="true"></div>
 
   <!-- AR表示用エリア -->
   <div id="ar-container">
     <a-scene id="ar-scene" embedded vr-mode-ui="enabled: false">
-      <!-- AR.jsの設定は後からJSで切替 -->
       <a-entity id="ar-content"></a-entity>
       <a-entity camera></a-entity>
     </a-scene>
@@ -136,72 +88,41 @@
   <audio id="beep-sound" src="beep.mp3" preload="auto"></audio>
 
   <script>
-    // DOM要素の取得
     const scannerContainer = document.getElementById('scanner-container');
     const previewElement = document.getElementById('preview');
+    const qrCanvas = document.getElementById('qr-canvas');
     const errorMessage = document.getElementById('error-message');
     const loadingIndicator = document.getElementById('loading-indicator');
     const arContainer = document.getElementById('ar-container');
     const arScene = document.getElementById('ar-scene');
     const arContent = document.getElementById('ar-content');
+    const startButton = document.getElementById('start-button');
     const retryButton = document.getElementById('retry-button');
     const beepSound = document.getElementById('beep-sound');
-    
+
+    let videoStream;
+    let scanning = false;
     let lastQRContent = "";
-    let scanner;
 
-    // ローディング表示の切り替え用関数
-    function showLoading() {
-      loadingIndicator.style.display = 'block';
-    }
-    function hideLoading() {
-      loadingIndicator.style.display = 'none';
-    }
-
-    // エラーメッセージ表示用関数
+    // ローディング表示の制御
+    function showLoading() { loadingIndicator.style.display = 'block'; }
+    function hideLoading() { loadingIndicator.style.display = 'none'; }
     function showError(msg) {
       errorMessage.textContent = msg;
       errorMessage.style.display = 'block';
-      setTimeout(() => {
-        errorMessage.style.display = 'none';
-      }, 5000);
-    }
-
-    // カメラの選択ロジック：Instascanのカメラ情報に加え、MediaDevices API の情報も参考にする
-    function getPreferredCamera(cameras) {
-      // 優先候補：カメラ名に "back" または "rear" が含まれる場合
-      let preferred = cameras.find(camera => camera.name && /back|rear/i.test(camera.name));
-      if(preferred) return preferred;
-      // MediaDevices APIで facingMode の "environment" を持つものがあれば利用（※Instascan側でその情報がない場合、端末依存）
-      if(navigator.mediaDevices && navigator.mediaDevices.enumerateDevices){
-        navigator.mediaDevices.enumerateDevices().then(devices => {
-          let videoDevices = devices.filter(device => device.kind === 'videoinput');
-          videoDevices.forEach(device => {
-            if(device.label.toLowerCase().includes('back') || device.label.toLowerCase().includes('rear')){
-              // この場合、Instascan内のカメラIDとマッチするものがあれば preferred に上書きできる（実装依存）
-              cameras.forEach(cam => {
-                if(cam.id === device.deviceId) {
-                  preferred = cam;
-                }
-              });
-            }
-          });
-        });
-      }
-      return cameras[0];
+      setTimeout(() => { errorMessage.style.display = 'none'; }, 5000);
     }
 
     // ARコンテンツのロード処理
-    // QRコードの内容がURLの場合はホワイトリストチェックを行い、該当すれば glTF モデルを読み込み、そうでなければテキストとして表示する
     function loadARContent(content) {
       showLoading();
-      // セキュリティ対策：scriptタグの検出
+      // セキュリティ対策：scriptタグの除外
       if(/<script>/i.test(content)) {
         showError("不正なQRコードの内容が含まれています");
         hideLoading();
         return;
       }
-      // ホワイトリスト例（必要に応じて編集）
+      // ホワイトリストの例（必要に応じて編集）
       const allowedDomains = ['example.com'];
       let isValidURL = false;
       try {
@@ -209,17 +130,13 @@
         if(allowedDomains.some(domain => urlObj.hostname.includes(domain))){
           isValidURL = true;
         }
-      } catch(e) {
-        // URLとして解析できなければ、プレーンテキストとして扱う
-      }
-      // ARオブジェクトの初期化処理：位置・サイズ・向きの設定を含む
+      } catch(e) { }
       if(isValidURL) {
-        // glTFモデルを読み込む例：QRコードのURLを3DモデルのURLとして利用
+        // 例：QRコードのURLを3Dモデルの読み込み先とする
         arContent.setAttribute('gltf-model', content);
         arContent.setAttribute('scale', '0.5 0.5 0.5');
         arContent.setAttribute('position', '0 0 0');
         arContent.setAttribute('rotation', '0 0 0');
-        // ARコンテンツの読み込みエラーへの対応
         arContent.addEventListener('model-error', function () {
           showError("ARコンテンツの読み込み中にネットワークエラーが発生しました。再試行してください。");
           retryButton.style.display = 'block';
@@ -229,107 +146,101 @@
           hideLoading();
         });
       } else {
-        // テキスト表示の場合
+        // URLでない場合はテキストとして表示
         arContent.setAttribute('text', `value: ${content}; align: center; color: #FFF; width: 4`);
         arContent.setAttribute('position', '0 1.5 -2');
         arContent.setAttribute('rotation', '0 0 0');
-        // テキストの場合は即座に読み込み完了とみなす
         hideLoading();
       }
     }
 
-    // Instascanの初期化とカメラ起動処理
-    function startScanner() {
-      showLoading();
-      // Instascan.Scanner の作成
-      scanner = new Instascan.Scanner({ 
-        video: previewElement,
-        mirror: false // モバイルでの鏡像反転を防ぐ
-      });
-      // モバイル向けにプレビューサイズの最適化（※カメラ解像度はブラウザ側の制約による）
-      if (/Mobi|Android/i.test(navigator.userAgent)) {
-        previewElement.setAttribute('width', '640');
-        previewElement.setAttribute('height', '480');
-      }
-      // スキャン成功時の処理
-      scanner.addListener('scan', function(content) {
-        // 再生：サウンドと振動によるフィードバック
+    // フレームごとに QR コードを解析
+    function scanFrame() {
+      if (!scanning) return;
+      const canvas = qrCanvas;
+      const context = canvas.getContext("2d");
+      canvas.width = previewElement.videoWidth;
+      canvas.height = previewElement.videoHeight;
+      context.drawImage(previewElement, 0, 0, canvas.width, canvas.height);
+      const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+      const code = jsQR(imageData.data, canvas.width, canvas.height);
+      if(code) {
+        scanning = false;
+        lastQRContent = code.data;
         if(beepSound) beepSound.play();
         if(navigator.vibrate) navigator.vibrate(200);
-        lastQRContent = content;
-        // セキュリティチェック（scriptタグの除外済みは loadARContent 内でもチェック）
-        if(/<script>/i.test(content)) {
-          showError("不正なQRコードの内容が含まれています");
-          return;
-        }
-        // ARコンテンツを読み込む
-        loadARContent(content);
-        // カメラの停止処理：Instascan停止＋各トラックの停止
-        scanner.stop();
-        if(previewElement.srcObject) {
-          previewElement.srcObject.getTracks().forEach(track => track.stop());
-        }
-        // スキャン画面からAR画面への遷移（アニメーション速度を0.3秒に調整）
+        stopVideoStream();
+        // 画面切替（0.3秒のフェードアウト）
         scannerContainer.style.opacity = 0;
         setTimeout(() => {
           scannerContainer.style.display = 'none';
           arContainer.style.display = 'block';
         }, 300);
-      });
+        loadARContent(code.data);
+      } else {
+        requestAnimationFrame(scanFrame);
+      }
+    }
 
-      // 利用可能なカメラを取得して開始する
-      Instascan.Camera.getCameras().then(function(cameras) {
-        if (cameras.length > 0) {
-          let selectedCamera = getPreferredCamera(cameras);
-          scanner.start(selectedCamera).then(() => {
-            hideLoading();
-          }).catch(function(error) {
-            console.error("カメラの開始エラー:", error);
-            let msg = error.toString().toLowerCase().includes("permission") ?
-              "カメラのアクセス権限がありません。設定でカメラアクセスを有効にしてください" :
-              "カメラの起動に失敗しました: " + error;
-            showError(msg);
-            hideLoading();
-          });
-        } else {
-          showError("カメラが見つかりません");
-          hideLoading();
+    // カメラ起動とQRコードスキャン開始
+    function startScanner() {
+      showLoading();
+      navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: { ideal: "environment" },
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
         }
-      }).catch(function(e) {
-        console.error(e);
-        showError("カメラへのアクセス権限が必要です。設定でカメラアクセスを有効にしてください");
+      }).then(stream => {
+        videoStream = stream;
+        previewElement.srcObject = stream;
+        previewElement.play();
+        scanning = true;
+        hideLoading();
+        requestAnimationFrame(scanFrame);
+      }).catch(error => {
+        console.error("カメラ起動エラー:", error);
+        let msg = error.toString().toLowerCase().includes("permission") ?
+          "カメラのアクセス権限がありません。設定でカメラアクセスを有効にしてください" :
+          "カメラの起動に失敗しました: " + error;
+        showError(msg);
         hideLoading();
       });
     }
 
-    // AR.js のデバッグモード切替：URLパラメーター「debug=true」で有効
+    // カメラストリームの停止処理
+    function stopVideoStream() {
+      if(videoStream) {
+        videoStream.getTracks().forEach(track => track.stop());
+      }
+    }
+
+    // AR.js のデバッグモード切替（URLパラメーター "debug=true" で有効）
     function configureARjs() {
       const isDebug = new URLSearchParams(window.location.search).get('debug') === 'true';
-      // AR.js の初期化前に設定を上書きする（a-scene の arjs コンポーネント属性を再設定）
       arScene.setAttribute('arjs', `sourceType: webcam; debugUIEnabled: ${isDebug};`);
     }
 
-    // デバイスの向きに応じたUI調整
     window.addEventListener("orientationchange", function() {
-      // 例：スキャンガイドの再配置（ここでは CSS で中央固定しているため基本不要）
-      // 必要に応じて各要素のスタイルを再計算する処理を追加してください
+      // 必要に応じてUI調整（ここでは CSS による中央固定のため基本不要）
     });
 
-    // 再試行ボタンのイベント
     retryButton.addEventListener('click', function() {
       retryButton.style.display = 'none';
-      // 再度ARコンテンツを読み込み直す
       loadARContent(lastQRContent);
     });
 
-    // ARシーンの読み込み完了時（レンダリング開始時）にローディングインジケーターを非表示
     arScene.addEventListener('renderstart', function () {
       hideLoading();
     });
 
-    // 初期化処理
+    // スタートボタン押下でカメラ起動開始（iOSではユーザー操作が必須）
+    startButton.addEventListener('click', function() {
+      startButton.style.display = 'none';
+      startScanner();
+    });
+
     configureARjs();
-    startScanner();
   </script>
 </body>
 </html>
