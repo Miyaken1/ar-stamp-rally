@@ -3,217 +3,144 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>QRコードスキャナー</title>
-  <!-- Instascan ライブラリ -->
+  <title>QRコードスキャン & AR体験</title>
+  <!-- Instascan (QRコードスキャン用) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/instascan/1.0.0/instascan.min.js"></script>
+  <!-- A-Frame と AR.js (AR表示用) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/aframe/1.2.0/aframe.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/ar.js/2.3.0/aframe-ar.js"></script>
   <style>
-    body {
-      margin: 0;
-      padding: 0;
-      font-family: Arial, sans-serif;
-      background-color: #f5f5f5;
-    }
-    
-    .container {
-      max-width: 800px;
-      margin: 0 auto;
-      padding: 20px;
-      text-align: center;
-    }
-    
-    h1 {
-      color: #333;
-      margin-bottom: 20px;
-    }
-    
-    #preview {
-      width: 100%;
-      max-width: 400px;
-      margin: 0 auto;
-      border: 3px solid #007BFF;
-      border-radius: 10px;
-      overflow: hidden;
-    }
-    
-    .guide {
-      margin-top: 20px;
-      padding: 15px;
-      background-color: #fff;
-      border-radius: 10px;
-      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-    }
-    
-    .status {
-      margin-top: 20px;
-      padding: 10px;
-      border-radius: 5px;
-      font-weight: bold;
+    body { margin: 0; font-family: Arial, sans-serif; }
+    #scanner-container { text-align: center; }
+    #preview { width: 100%; max-width: 400px; margin: auto; }
+    #ar-scene { display: none; }
+    #stamp-message {
       display: none;
-    }
-    
-    .success {
-      background-color: #d4edda;
-      color: #155724;
-      border: 1px solid #c3e6cb;
-    }
-    
-    .error {
-      background-color: #f8d7da;
-      color: #721c24;
-      border: 1px solid #f5c6cb;
-    }
-    
-    .stamp-count {
-      margin-top: 20px;
-      font-size: 18px;
+      position: fixed;
+      bottom: 20px;
+      left: 0;
+      right: 0;
+      text-align: center;
+      background: rgba(255,255,255,0.8);
+      padding: 10px;
       font-weight: bold;
-      color: #007BFF;
-    }
-    
-    button {
-      margin-top: 15px;
-      background-color: #007BFF;
-      color: white;
-      border: none;
-      border-radius: 5px;
-      padding: 10px 20px;
-      font-size: 16px;
-      cursor: pointer;
-    }
-    
-    button:hover {
-      background-color: #0056b3;
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h1>ARスタンプラリー</h1>
-    
-    <div class="guide">
-      <p>QRコードをスキャンして、スタンプを集めましょう！</p>
-    </div>
-    
-    <div id="preview"></div>
-    
-    <div id="status" class="status"></div>
-    
-    <div id="stamp-count" class="stamp-count"></div>
-    
-    <button id="show-stamps">スタンプ一覧</button>
+  <!-- QRコードスキャン用エリア -->
+  <div id="scanner-container">
+    <video id="preview"></video>
+    <div id="message">QRコードを読み込んでください</div>
   </div>
-  
+
+  <!-- AR表示用エリア -->
+  <a-scene id="ar-scene" embedded arjs="sourceType: webcam; debugUIEnabled: false;">
+    <a-entity id="ar-content"></a-entity>
+    <a-entity camera></a-entity>
+  </a-scene>
+
+  <!-- スタンプ獲得メッセージ -->
+  <div id="stamp-message"></div>
+
   <script>
-    document.addEventListener('DOMContentLoaded', function() {
-      // 既存のスタンプデータを取得
-      function getStampData() {
-        let stamps = localStorage.getItem('ar-stamps');
-        if (!stamps) {
-          stamps = JSON.stringify({
-            totalStamps: 0,
-            locations: {}
-          });
-          localStorage.setItem('ar-stamps', stamps);
-        }
-        return JSON.parse(stamps);
+    // InstascanによるQRコード読み取り設定
+    let scanner = new Instascan.Scanner({ video: document.getElementById('preview') });
+    scanner.addListener('scan', function(content) {
+      // QRコードの内容をJSONとしてパース
+      let data;
+      try {
+        data = JSON.parse(content);
+      } catch (e) {
+        alert("無効なQRコードです。正しい形式のQRコードを読み込んでください。");
+        return;
       }
+      // スキャン後、QRコード読み取り用のUIを非表示にしてARシーンを表示
+      document.getElementById('scanner-container').style.display = 'none';
+      document.getElementById('ar-scene').style.display = 'block';
       
-      // スタンプ数を表示
-      function updateStampCount() {
-        const stampData = getStampData();
-        const stampCountElement = document.getElementById('stamp-count');
-        stampCountElement.textContent = `獲得したスタンプ: ${stampData.totalStamps} 個`;
-      }
-      
-      // スキャナーの初期化
-      let scanner = new Instascan.Scanner({ 
-        video: document.getElementById('preview'),
-        mirror: false
-      });
-      
-      // QRコードスキャン時の処理
-      scanner.addListener('scan', function(content) {
-        try {
-          // スキャン音を再生（オプション）
-          const audio = new Audio('https://cdn.jsdelivr.net/gh/niklasvh/html-to-image@v1.11.11/dist/html-to-image.js'); // この行は実際のプロジェクトでは適切な音声ファイルに置き換える
-          audio.play().catch(e => console.log('Audio play failed:', e));
-          
-          // URLであるかチェック
-          if (content.startsWith('http://') || content.startsWith('https://')) {
-            // QRコードがURLの場合、リダイレクト
-            const statusElement = document.getElementById('status');
-            statusElement.textContent = 'QRコードを認識しました。ARコンテンツに移動します...';
-            statusElement.className = 'status success';
-            statusElement.style.display = 'block';
-            
-            // 少し待ってからリダイレクト
-            setTimeout(() => {
-              window.location.href = content;
-            }, 1000);
-          } else {
-            // URLでない場合はエラーメッセージを表示
-            const statusElement = document.getElementById('status');
-            statusElement.textContent = '無効なQRコードです。スタンプラリー用のQRコードをスキャンしてください。';
-            statusElement.className = 'status error';
-            statusElement.style.display = 'block';
-            
-            // エラーメッセージを数秒後に消す
-            setTimeout(() => {
-              statusElement.style.display = 'none';
-            }, 3000);
+      // 外部設定ファイル (ar-config.json) を読み込み、該当ロケーションの設定があればマージする
+      fetch('ar-config.json')
+        .then(response => response.json())
+        .then(config => {
+          if (config[data.location]) {
+            // QRコード内のarContentと外部設定をマージ（外部設定をデフォルトとし、QR内の内容で上書き）
+            data.arContent = Object.assign({}, config[data.location], data.arContent);
           }
-        } catch (error) {
-          console.error('QR処理エラー:', error);
-          alert('QRコードの処理中にエラーが発生しました。もう一度お試しください。');
-        }
-      });
+          // ARコンテンツの表示
+          displayARContent(data.arContent);
+        })
+        .catch(err => {
+          console.log("外部設定の読み込みエラー:", err);
+          // 外部設定が読み込めない場合でもQRコード内の情報で表示
+          displayARContent(data.arContent);
+        });
       
-      // カメラの初期化
-      Instascan.Camera.getCameras().then(function(cameras) {
-        if (cameras.length > 0) {
-          // 背面カメラを優先的に使用
-          let selectedCamera = cameras[0]; // デフォルトは最初のカメラ
-          
-          // 複数のカメラがある場合、背面カメラ（environment）を選択
-          for (let i = 0; i < cameras.length; i++) {
-            if (cameras[i].name.toLowerCase().indexOf('back') !== -1 || 
-                cameras[i].name.toLowerCase().indexOf('environment') !== -1) {
-              selectedCamera = cameras[i];
-              break;
-            }
-          }
-          
-          scanner.start(selectedCamera);
-        } else {
-          console.error('カメラが見つかりません');
-          alert('お使いのデバイスではカメラが利用できません。別のデバイスでお試しください。');
-        }
-      }).catch(function(e) {
-        console.error('カメラアクセスエラー:', e);
-        alert('カメラへのアクセスに失敗しました。カメラの使用許可を確認してください。');
-      });
-      
-      // スタンプ一覧を表示
-      document.getElementById('show-stamps').addEventListener('click', function() {
-        const stampData = getStampData();
-        let message = `獲得したスタンプ: ${stampData.totalStamps} 個\n\n`;
-        
-        if (stampData.totalStamps === 0) {
-          message += 'まだスタンプを獲得していません。QRコードをスキャンしてスタンプを集めましょう！';
-        } else {
-          for (const locationId in stampData.locations) {
-            const location = stampData.locations[locationId];
-            const date = new Date(location.timestamp);
-            message += `・${location.name}: ${date.toLocaleDateString()} ${date.toLocaleTimeString()}\n`;
-          }
-        }
-        
-        alert(message);
-      });
-      
-      // 初期スタンプ数の表示
-      updateStampCount();
+      // ARコンテンツ表示から4秒後にスタンプ獲得処理を実行
+      setTimeout(() => {
+        awardStamp(data.location, data.arContent);
+      }, 4000);
     });
+    // 利用可能なカメラを取得して開始
+    Instascan.Camera.getCameras().then(function(cameras) {
+      if(cameras.length > 0) {
+        scanner.start(cameras[0]);
+      } else {
+        alert("カメラが見つかりません");
+      }
+    }).catch(function(e) {
+      console.error(e);
+      alert("カメラの初期化に失敗しました");
+    });
+
+    // ARコンテンツの表示処理
+    function displayARContent(arContent) {
+      const arEntity = document.getElementById('ar-content');
+      // 既存の内容をクリア
+      while (arEntity.firstChild) {
+        arEntity.removeChild(arEntity.firstChild);
+      }
+      // もしarContentにモデルパスが指定されていれば3Dモデルを表示、なければデフォルトの箱を表示
+      if (arContent && arContent.model) {
+        const entity = document.createElement('a-entity');
+        entity.setAttribute('gltf-model', arContent.model);
+        // 任意で色などの設定（モデルによっては色指定が不要の場合もある）
+        if(arContent.color) {
+          entity.setAttribute('material', 'color', arContent.color);
+        }
+        entity.setAttribute('position', '0 0 -1');
+        entity.setAttribute('scale', '0.5 0.5 0.5');
+        entity.setAttribute('animation', 'property: rotation; to: 0 360 0; loop: true; dur: 10000; easing: linear');
+        arEntity.appendChild(entity);
+      } else {
+        // デフォルト表示：シンプルなボックス
+        const box = document.createElement('a-box');
+        box.setAttribute('color', arContent && arContent.color ? arContent.color : '#4CC3D9');
+        box.setAttribute('position', '0 0.5 -1');
+        box.setAttribute('rotation', '0 45 0');
+        arEntity.appendChild(box);
+      }
+    }
+
+    // スタンプ獲得処理（ローカルストレージに記録し、メッセージを表示）
+    function awardStamp(location, arContent) {
+      let stamps = localStorage.getItem('ar-stamps');
+      if (!stamps) {
+        stamps = { totalStamps: 0, locations: {} };
+      } else {
+        stamps = JSON.parse(stamps);
+      }
+      // 既にスタンプが存在しない場合のみ追加
+      if (!stamps.locations[location]) {
+        stamps.locations[location] = { timestamp: new Date().toISOString(), arContent: arContent };
+        stamps.totalStamps++;
+        localStorage.setItem('ar-stamps', JSON.stringify(stamps));
+      }
+      // スタンプ獲得メッセージの表示
+      const stampMsg = document.getElementById('stamp-message');
+      stampMsg.style.display = 'block';
+      stampMsg.textContent = 'スタンプ獲得！ 現在の獲得スタンプ: ' + stamps.totalStamps + '個';
+    }
   </script>
 </body>
 </html>
