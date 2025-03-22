@@ -1,0 +1,10 @@
+{
+  "location1": {
+    "model": "models/model1.gltf",
+    "color": "#FF0000"
+  },
+  "location2": {
+    "model": "models/model2.gltf",
+    "color": "#00FF00"
+  }
+}
